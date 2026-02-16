@@ -21,8 +21,8 @@ const JAILBREAK_PATTERNS = [
   // DAN (Do Anything Now) variants
   { pattern: /\b(DAN|do anything now)\b/gi, name: 'DAN Pattern', score: 0.9 },
   
-  // Role-playing jailbreaks
-  { pattern: /(pretend to be|act as if you are|roleplay as|you are now)/gi, name: 'Roleplay', score: 0.7 },
+  // Role-playing jailbreaks (only in direct instruction context)
+  { pattern: /(?:you are|act as if you are|roleplay as|pretend to be)(?: a| an| the| having| with| without)[ a-zA-Z]{0,20}(?:no |un)?(?:restrictions|limits|rules|guidelines)/gi, name: 'Roleplay', score: 0.8 },
   
   // Prompt injection
   { pattern: /(ignore (all )?(previous|above)|disregard (your )?(instructions|rules)|forget (your )?guidelines)/gi, name: 'Prompt Injection', score: 0.85 },
@@ -33,8 +33,8 @@ const JAILBREAK_PATTERNS = [
   // Jailbreak keywords
   { pattern: /\b(jailbreak|bypass|override|unrestricted|no limits)\b/gi, name: 'Jailbreak Keyword', score: 0.6 },
   
-  // Creator/manufacturer manipulation
-  { pattern: /(your (creator|developer|manufacturer)|OpenAI|Anthropic) (said|told|asked)/gi, name: 'Authority Claim', score: 0.5 },
+  // Creator/manufacturer manipulation - only when claiming they said/told something
+  { pattern: /(your (creator|developer|manufacturer)|OpenAI|Anthropic) (?:said|told|asked|programmed|built)/gi, name: 'Authority Claim', score: 0.7 },
   
   //越狱 (jailbreak in Chinese)
   { pattern: /越狱/gi, name: 'Chinese Jailbreak', score: 0.8 },
@@ -64,9 +64,12 @@ const HEURISTICS = [
     score: 0.5
   },
   
-  // Base64-like strings
+  // Base64-like strings (must contain at least one of +/=)
   {
-    check: (text: string) => /^[A-Za-z0-9+/=]{20,}$/.test(text.replace(/\s/g, '')),
+    check: (text: string) => {
+      const cleaned = text.replace(/\s/g, '');
+      return cleaned.length >= 20 && /^[A-Za-z0-9+/]+={0,2}$/.test(cleaned) && /[+/=]/.test(cleaned);
+    },
     name: 'Base64 Encoded',
     score: 0.7
   },
@@ -122,8 +125,11 @@ export function detectJailbreak(input: string): JailbreakResult {
     }
   }
   
-  // Calculate confidence (0-1)
-  const confidence = Math.min(totalScore / 2, 1);
+  // Calculate confidence (0-1) - use weighted average based on detection count
+  const detectionCount = detections.length;
+  const confidence = detectionCount > 0 
+    ? Math.min(totalScore / (1.5 + detectionCount * 0.3), 1)
+    : 0;
   
   // Determine severity
   let severity: JailbreakResult['severity'] = 'low';
