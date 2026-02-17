@@ -1,0 +1,227 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Agent model - represents an AI agent being monitored
+model Agent {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String?
+  status      AgentStatus @default(ACTIVE)
+  dailyBudget Float?   // Daily budget in dollars
+  monthlyBudget Float? // Monthly budget in dollars
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  tasks        Task[]
+  usageRecords UsageRecord[]
+  errorLogs    ErrorLog[]
+  auditLogs    AuditLog[]
+  budgets      BudgetAlert[]
+}
+
+enum AgentStatus {
+  ACTIVE
+  INACTIVE
+  ERROR
+}
+
+// Task model - represents a task executed by an agent
+model Task {
+  id          String   @id @default(cuid())
+  agentId     String
+  agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  status      TaskStatus @default(PENDING)
+  inputTokens Int      @default(0)
+  outputTokens Int     @default(0)
+  totalTokens Int      @default(0)
+  cost        Float    @default(0)
+  durationMs  Int?     // Duration in milliseconds
+  startedAt   DateTime @default(now())
+  completedAt DateTime?
+  metadata    Json?    // Additional task metadata
+  errorLogs   ErrorLog[]
+
+  @@index([agentId])
+  @@index([status])
+  @@index([startedAt])
+}
+
+enum TaskStatus {
+  PENDING
+  RUNNING
+  COMPLETED
+  FAILED
+  CANCELLED
+}
+
+// UsageRecord model - tracks token usage over time
+model UsageRecord {
+  id          String   @id @default(cuid())
+  agentId     String
+  agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  date        DateTime @default(now())
+  inputTokens Int      @default(0)
+  outputTokens Int     @default(0)
+  totalTokens Int      @default(0)
+  cost        Float    @default(0)
+  model       String?  // AI model used (e.g., gpt-4, claude-3)
+  
+  @@unique([agentId, date]) // One record per agent per day
+  @@index([agentId])
+  @@index([date])
+}
+
+// ErrorLog model - tracks errors and failures
+model ErrorLog {
+  id          String   @id @default(cuid())
+  agentId     String
+  agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  taskId      String?  // Associated task (if any)
+  task        Task?    @relation(fields: [taskId], references: [id], onDelete: SetNull)
+  type        ErrorType
+  message     String
+  stackTrace  String?
+  severity    ErrorSeverity @default(ERROR)
+  resolved    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([agentId])
+  @@index([type])
+  @@index([severity])
+  @@index([createdAt])
+}
+
+enum ErrorType {
+  API_ERROR
+  RATE_LIMIT
+  TIMEOUT
+  INVALID_RESPONSE
+  AUTH_ERROR
+  CIRCUIT_BREAKER
+  UNKNOWN
+}
+
+enum ErrorSeverity {
+  INFO
+  WARNING
+  ERROR
+  CRITICAL
+}
+
+// AuditLog model - for compliance and debugging
+model AuditLog {
+  id          String   @id @default(cuid())
+  agentId     String
+  agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  action      String   // Action performed (e.g., 'task.start', 'task.complete')
+  details     Json?    // Action details
+  ipAddress   String?
+  userAgent   String?
+  createdAt   DateTime @default(now())
+
+  @@index([agentId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+// BudgetAlert model - tracks budget thresholds and alerts
+model BudgetAlert {
+  id          String   @id @default(cuid())
+  agentId     String
+  agent       Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  type        BudgetType
+  threshold   Float    // Budget threshold amount
+  currentSpend Float  @default(0)
+  alertSent   Boolean  @default(false)
+  sentAt      DateTime?
+  createdAt   DateTime @default(now())
+
+  @@index([agentId])
+}
+
+enum BudgetType {
+  DAILY
+  WEEKLY
+  MONTHLY
+}
+
+// ========================================
+// TruckCRM - Trade Contractor CRM Models
+// ========================================
+
+// Customer model - trade contractor customers
+model Customer {
+  id          String   @id @default(cuid())
+  name        String
+  email       String?
+  phone       String?
+  address     String?
+  tradeType   String?  // plumber, electrician, hvac, landscaper, etc.
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  jobs        Job[]
+  invoices    Invoice[]
+}
+
+enum JobStatus {
+  LEAD
+  SCHEDULED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+// Job model - represents a job/project
+model Job {
+  id          String   @id @default(cuid())
+  customerId   String
+  customer     Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  status      JobStatus @default(LEAD)
+  scheduledAt DateTime?
+  completedAt DateTime?
+  estimatedCost Float?
+  actualCost   Float?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  invoices    Invoice[]
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+// Invoice model - simple invoicing
+model Invoice {
+  id          String   @id @default(cuid())
+  customerId  String
+  customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  jobId       String?
+  job         Job?     @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  invoiceNumber String @unique
+  amount      Float
+  status      InvoiceStatus @default(DRAFT)
+  dueDate     DateTime?
+  paidAt      DateTime?
+  notes       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
