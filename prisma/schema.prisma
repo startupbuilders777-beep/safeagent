@@ -225,3 +225,21 @@ model Invoice {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }
+
+// ScanHistory model - tracks content scans
+model ScanHistory {
+  id          String   @id @default(cuid())
+  apiKey      String   // API key (from NextAuth user.id)
+  content     String
+  safe        Boolean
+  jailbreakDetected Boolean @default(false)
+  jailbreakScore   Float?
+  piiDetected      Boolean @default(false)
+  piiCount         Int     @default(0)
+  piiTypes         String[] // Types of PII found
+  summary      String?
+  createdAt   DateTime @default(now())
+
+  @@index([apiKey])
+  @@index([createdAt])
+}
